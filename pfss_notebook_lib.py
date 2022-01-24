@@ -286,6 +286,38 @@ def ortho_to_points(lon1, lat1, orthodrome, rad=False):
 
 # ----------------------------------------------------------------------------------------
 
+def arcsec_to_carrington(arc_x, arc_y, time):
+
+    from astropy.coordinates import SkyCoord#sky_coordinate
+    import astropy.units as u
+    from sunpy.coordinates import frames
+    from sunpy.coordinates import get_horizons_coord
+
+    """
+    transforms arcsec on the solar disk (as seen from Earth) to Carrington longitude & latitude    Parameters
+    ----------
+    arc_x : float
+        Helioprojective x coordinate in arcsec
+    arc_y : float
+        Helioprojective y coordinate in arcsec
+    time : string
+        date and time, for example: '2021-04-17 16:00'
+
+    Returns
+    -------
+    lon, lat : float 
+        longitude and latitude in Carrington coordinates
+    """
+
+    c = SkyCoord(arc_x*u.arcsec, arc_y*u.arcsec, frame=frames.Helioprojective, obstime=time, observer="earth")
+    Carr = c.transform_to(frames.HeliographicCarrington(observer="Sun"))
+    lon = Carr.lon.value
+    lat = Carr.lat.value
+
+    return lon, lat
+
+# ----------------------------------------------------------------------------------------
+
 def get_pfss_hmimap(filepath, email, carrington_rot, date, rss=2.5, nrho=35):
     '''
     downloading hmi map or calculating the PFSS solution
@@ -970,6 +1002,29 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
     else:
         return fline_objects
 
+# ---------------------------------------------------------------------------
+
+def get_sc_data(csvfile: str):
+    '''
+    Reads the contents of solar-mach produced csv file, and returns lists
+    of necessary data to run pfss field line tracing analysis.
+    
+    csvfile: str, the name of the csv file one wants to read
+    '''
+    import pandas as pd
+
+    if type(csvfile) is not str:
+        raise TypeError("File name is not a string.")
+
+    csvdata = pd.read_csv(csvfile)
+    
+    names = list(csvdata['Spacecraft/Body'])
+    lons = list(csvdata['Carrington Longitude (°)'])
+    lats = list(csvdata['Latitude (°)'])
+    dist = au_to_km(list(csvdata['Heliocentric Distance (AU)']))
+    sw = list(csvdata['Vsw'])
+    
+    return names, sw, dist, lons, lats
 
 # ========================================================================================
 
