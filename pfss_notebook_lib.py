@@ -5,7 +5,7 @@ for seeking the footpoints of IMF field lines connecting back to the photosphere
 @Author: Christian Palmroos
          <chospa@utu.fi>
 
-Last updated: 2021-10-25
+Last updated: 2022-01-20
 '''
 
 #imports:
@@ -63,10 +63,14 @@ def get_color(key: str = None) -> str:
                 'mars': 'maroon',
                 'jupiter': 'navy',
                 'stereo a': 'red',
+                'stereo-a': 'red',
                 'stereo b': 'b',
+                'stereo-b': 'b',
                 'soho': 'darkgreen',
                 'solo': 'dodgerblue',
+                'solar orbiter': 'dodgerblue',
                 'psp': 'purple',
+                'parker solar probe': 'purple',
                 'bepicolombo': 'orange',
                 'maven': 'brown',
                 'mars express': 'darkorange',
@@ -83,6 +87,30 @@ def get_color(key: str = None) -> str:
 
 
     return color_dict[key]
+
+# ----------------------------------------------------------------------------------------
+
+def get_sc_data(csvfile: str):
+    '''
+    Reads the contents of solar-mach produced csv file, and returns lists
+    of necessary data to run pfss field line tracing analysis.
+    
+    csvfile: str, the name of the csv file one wants to read
+    '''
+    import pandas as pd
+
+    if type(csvfile) is not str:
+        raise TypeError("File name is not a string.")
+
+    csvdata = pd.read_csv(csvfile)
+    
+    names = list(csvdata['Spacecraft/Body'])
+    lons = list(csvdata['Carrington Longitude (°)'])
+    lats = list(csvdata['Latitude (°)'])
+    dist = au_to_km(list(csvdata['Heliocentric Distance (AU)']))
+    sw = list(csvdata['Vsw'])
+    
+    return names, sw, dist, lons, lats
 
 # ----------------------------------------------------------------------------------------
 
@@ -241,6 +269,21 @@ def orthodrome(lon1,lat1, lon2,lat2, rad=False) -> float:
 
     return ortho
 
+#----------------------------------------------------------------------------------------
+
+def ortho_to_points(lon1, lat1, orthodrome, rad=False):
+    '''
+    Calculates a lon/lat pair from a central point and an orthodrome(=total angular separation between points)
+    '''
+
+    if rad == False:
+        lon1 = np.deg2rad(lon1)
+        lat1 = np.deg2rad(lat1)
+
+    lon2, lat2 = np.cos(lon1+orthodrome), np.sin(lat1+orthodrome)
+
+    return lon2,lat2
+
 # ----------------------------------------------------------------------------------------
 
 def get_pfss_hmimap(filepath, email, carrington_rot, date, rss=2.5, nrho=35):
@@ -337,26 +380,57 @@ def vary_flines(lon, lat, hmimap, n_varies):
     
     lon: longitude of the footpoint [rad]
     lat: latitude of the footpoint [rad]
-    n_varies: the amount of EXTRA fieldlines traced
+    
+    n_varies:   tuple that holds the amount of circles and the number of dummy flines per circle
+                if type(n_varies)=int, consider that as the amount of circles, and set the 
+                amount of dummy flines per circle to 16
+
+    n_circles:  the amount of circles of fieldlines traced
+    n_flines:   the number of dummy fieldlines per one circle of fieldlines
     '''
-    
+    #field lines per n_circles (circle)
+    if isinstance(n_varies,list):
+        n_circles = n_varies[0]
+        n_flines = n_varies[1]
+    else:
+        n_circles = n_varies
+        n_flines = 16
+
     #first produce new points around the given lonlat_pair
-    pointlist = circle_around(lon,lat,n_varies)
-    
+    lons,lats= np.array([lon]), np.array([lat])
+    increments = np.array([0.03, 0.05, 0.07, 0.09, 0.11, 0.13, 0.15, 0.17, 0.19, 0.21, 0.23, 0.25, 0.27, 0.29])
+    for circle in range(n_circles):
+
+        newlons,newlats = circle_around(lon,lat,n_flines,r=increments[circle])
+        lons, lats = np.append(lons,newlons), np.append(lats,newlats)
+
+
+    pointlist = np.array([lons,lats])
+
     #trace fieldlines from all of these points
     varycoords, varyflines = get_field_line_coords(pointlist[0],pointlist[1],hmimap)
-    
+
     #because the original fieldlines and the varied ones are all in the same arrays,
     #extract the varied ones to their own arrays
     coordlist, flinelist = [], []
+
+    #total amount of flines = 1 + (circles) * (fieldlines_per_circle)
+    total_per_fp = n_flines*n_circles+1
+    erased_indices = []
     for i in range(len(varycoords)):
-        if i%(n_varies+1) == 0:
+        #n_flines*n_circles = the amount of extra field lines between each "original" field line
+        if i%(total_per_fp)==0:
+            erased_indices.append(i)
             #pop(i) removes the ith element from the list and returns it
             #-> we append it to the list of original footpoint fieldlines
-            coordlist.append(varycoords.pop(i))
-            flinelist.append(varyflines.pop(i))
-    
-    
+            coordlist.append(varycoords[i]) #.pop(i)
+            flinelist.append(varyflines[i])
+
+    #really ugly quick fix to erase values from varycoords and varyflines
+    for increment, index in enumerate(erased_indices):
+        varycoords.pop(index-increment)
+        varyflines.pop(index-increment)
+
     return coordlist, flinelist, varycoords, varyflines
 
 # ----------------------------------------------------------------------------------------
@@ -471,7 +545,7 @@ def multicolorline(x, y, cvals, ax, vmin=-90, vmax=90):
     '''
 
     from matplotlib.collections import LineCollection
-    from matplotlib.colors import ListedColormap, BoundaryNorm
+    #from matplotlib.colors import ListedColormap, BoundaryNorm
 
     # Create a set of line segments so that we can color them individually
     # This creates the points as a N x 1 x 2 array so that we can stack points
@@ -899,6 +973,8 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
 
 # ========================================================================================
 
-if __name__ == '__main__':
-    
-    pass
+#============================================================================================================================
+#this will be ran when importing
+#set Jupyter notebook cells to 100% screen size:
+from IPython.core.display import display, HTML
+display(HTML(data="""<style> div#notebook-container { width: 99%; } div#menubar-container { width: 85%; } div#maintoolbar-container { width: 99%; } </style>"""))
