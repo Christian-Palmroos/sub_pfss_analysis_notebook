@@ -5,7 +5,7 @@ for seeking the footpoints of IMF field lines connecting back to the photosphere
 @Author: Christian Palmroos
          <chospa@utu.fi>
 
-Last updated: 2022-01-20
+Last updated: 2022-03-02
 '''
 
 #imports:
@@ -18,16 +18,17 @@ import matplotlib.pylab as pl
 import matplotlib.colors as mcolors
 import cmasher as cmr
 import numpy as np
+import pandas as pd
 import pfsspy
-import scipy
+#import scipy
 import pickle
 import warnings
 import sunpy.map
 #import sunpy.io.fits
 
-from astropy.time import Time
+#from astropy.time import Time
 from astropy.coordinates import SkyCoord
-from pfsspy import coords
+#from pfsspy import coords
 from pfsspy import tracing
 #from pfsspy.sample_data import get_gong_map
 from mpl_toolkits.mplot3d import Axes3D
@@ -35,6 +36,8 @@ from matplotlib import cm
 from matplotlib.offsetbox import AnchoredText
 from sunpy.net import Fido, attrs as a
 #from sunpy.coordinates import frames
+
+import os
 
 #some matplotlib settings:
 plt.rcParams['axes.linewidth'] = 1.5
@@ -125,13 +128,13 @@ def field_line_accuracy(flines):
 
     footpoints = []
     for fline in flines:
-        
+
         r, lon, lat = get_coord_values(fline)
-        
+
         #index 0 of coordinates corresponds to photospheric coordinates, index -1 to pfss
         footpoint = [lon[0], lat[0]]
         footpoints.append(footpoint)
-        
+
     #declare longitudes and latitudes of footpoints
     footp_lons = [pair[0] for pair in footpoints]
     footp_lats = [pair[1] for pair in footpoints]
@@ -143,10 +146,10 @@ def field_line_accuracy(flines):
 
         #transfer of longitudes
         footp_lons = shift_longitudes(footp_lons)
-        
+
         #calculate the central point
         c_point = [np.mean(footp_lons), np.mean(footp_lats)]
-        
+
         #standard deviation of longitudes and latitudes
         lon_std = np.std(footp_lons)
         lat_std = np.std(footp_lats)
@@ -161,10 +164,10 @@ def field_line_accuracy(flines):
             #distance is in solar radii
             distance_rs = angular_separation
             dist_sum = dist_sum + distance_rs
-        
+
         #transfer lons and the central point back the same amount that the longitudes were moved
         footp_lons = shift_longitudes(footp_lons, shift=-180.0)
-        c_point[0] = c_point[0]-180.0
+        c_point[0] = shift_longitudes([c_point[0]], shift=-180.0)[0]
 
     else:
         
@@ -234,7 +237,7 @@ def map_on_surface(fps, c_point, avg_d, shift=None, zoom=None, show_avg_d=False)
     ax = plt.subplot()
 
     ax.scatter(fpslons[0], fpslats[0], c='navy', s=60, label="original footpoint")
-    ax.scatter(fpslons[1:], fpslats[1:], c='C0', label="varied footpoints")
+    ax.scatter(fpslons[1:], fpslats[1:], c='C0', label="dummy footpoints")
     ax.scatter(centre[0], centre[1], c='r', label="avg(lons,lats)")
     
     if show_avg_d:
@@ -373,26 +376,21 @@ def circle_around(x,y,n,r=0.1):
  
     origin = (x,y)
 
-    x_coords = np.array([origin[0]])
-    y_coords = np.array([origin[1]])
-
-    #@TODO: employ orthodrome() in generating the dummy footpoints
-    #@TODO: make it so that there are several circles of dummy points, or a scatter of points inside
-    #       a circular area
-
+    x_coords = np.array([])
+    y_coords = np.array([])
     for i in range(0,n):
 
         theta = (2*i*np.pi)/n
         newx = origin[0] + r*np.cos(theta)
         newy = origin[1] + r*np.sin(theta)
-        
+
         if newx >= 2*np.pi:
             newx = newx - 2*np.pi
-        
+
         if newy > np.pi/2:
             overflow = newy - np.pi/2
             newy = newy - 2*overflow
-            
+
         if newy < -np.pi/2:
             overflow = newy + np.pi/2
             newy = newy + 2*overflow
@@ -472,15 +470,14 @@ def get_coord_values(field_line):
     Gets the coordinate values from FieldLine object and makes sure that they are in the right order.
     '''
     
-    fl_r = field_line.coords.radius.value / const.R_sun.value
-    fl_lon = field_line.coords.lon.value
-    fl_lat = field_line.coords.lat.value
+    #first check that the field_line object is oriented correctly (start on photosphere and end at pfss)
+    fl_coordinates = field_line.coords
+    fl_coordinates = check_field_line_alignment(fl_coordinates)
     
-    #check that the field line starts from photosphere and ends at pfss
-    if fl_r[0] > fl_r[-1]:
-        fl_r = np.flip(fl_r)
-        fl_lon = np.flip(fl_lon)
-        fl_lat = np.flip(fl_lat)
+    fl_r = fl_coordinates.radius.value / const.R_sun.value
+    fl_lon = fl_coordinates.lon.value
+    fl_lat = fl_coordinates.lat.value
+    
         
     return fl_r, fl_lon, fl_lat
 
@@ -518,8 +515,8 @@ def get_field_line_coords(longitude, latitude, hmimap):
             fline = trace_field_line(longitude[i], latitude[i], hmimap)
 
             radius0 = fline.coords.radius[0].value
-            radius2 = fline.coords.radius[2].value
-            bool_key = (radius0==radius2)
+            radius9 = fline.coords.radius[-1].value
+            bool_key = (radius0==radius9)
 
             #if fline is not a valid field line, then alter lat a little and try again
             #also check if this is a null line (all coordinates identical)
@@ -577,7 +574,7 @@ def multicolorline(x, y, cvals, ax, vmin=-90, vmax=90):
     '''
 
     from matplotlib.collections import LineCollection
-    #from matplotlib.colors import ListedColormap, BoundaryNorm
+    from matplotlib.colors import ListedColormap, BoundaryNorm
 
     # Create a set of line segments so that we can color them individually
     # This creates the points as a N x 1 x 2 array so that we can stack points
@@ -636,6 +633,9 @@ def plot3d(field_lines):
     y = np.sin(u)*np.sin(v)
     z = np.cos(v)
     axarr.plot_wireframe(x*r_sun, y*r_sun, z*r_sun, color="darkorange")
+    axarr.set_xlim(-2,2)
+    axarr.set_ylim(-2,2)
+    axarr.set_zlim(-2,2)
     
     for field_line in field_lines:
             coords = field_line.coords
@@ -645,6 +645,11 @@ def plot3d(field_lines):
             coords.y / const.R_sun,
             coords.z / const.R_sun,
             color=color, linewidth=1)
+    
+    try:
+        axarr.set_aspect('equal', adjustable='box')
+    except NotImplementedError:
+        axarr.set_aspect('auto', adjustable='box')
 
 # ----------------------------------------------------------------------------------------
 
@@ -655,10 +660,6 @@ def draw_fieldlines(field_lines, frame='yz', save=False):
     #check if there's a list inside a list, if there is -> flatten
     if isinstance(field_lines[0],list):
         field_lines = flatten(field_lines)
-
-    plt.rcParams['axes.linewidth'] = 1.5
-    plt.rcParams['font.size'] = 20
-    plt.rcParams['agg.path.chunksize'] = 20000
 
     fig, ax = plt.subplots(figsize=[10,10])
     r_ss = 2.5
@@ -706,9 +707,6 @@ def draw_fieldlines(field_lines, frame='yz', save=False):
 
     plt.title(projection)
 
-    plt.xlabel(r'R$_ {S}$')
-    plt.ylabel(r'R$_ {S}$')
-
     if save:
         plt.savefig('overhead.png')
 
@@ -729,6 +727,22 @@ def flatten(l):
             return l
 
     return flat
+
+# ----------------------------------------------------------------------------------------
+
+def check_field_line_alignment(coordinates):
+    '''
+    Checks that a field line object is oriented such that it starts from
+    the photpshere and ends at the pfss. If that is not the case, then
+    flips the field line coordinates over and returns the flipped object.
+    '''
+    
+    fl_r = coordinates.radius.value
+    
+    if fl_r[0] > fl_r[-1]:
+        coordinates = np.flip(coordinates)
+
+    return coordinates
 
 # ----------------------------------------------------------------------------------------
 
@@ -763,7 +777,7 @@ def trace_field_line(lon0, lat0, hmimap, rad=True):
 
 # ----------------------------------------------------------------------------------------
 
-def parker_spiral(sw, distance, longitude, resolution, endpoint=2.5):
+def parker_spiral(sw, distance, longitude, resolution, endpoint=2.5, backtrack=True):
     '''
     construct one magnetic parker spiral arm
 
@@ -784,14 +798,19 @@ def parker_spiral(sw, distance, longitude, resolution, endpoint=2.5):
     omega = 2.694e-6 #rad/s
 
     r = np.linspace(endpoint, distance, resolution) #linspace to get even spacing
-    phi = longitude + (omega)*(distance-r)/sw
+
+    #backtracking means going from sc to source surface
+    if backtrack:
+        phi = longitude + (omega)*(distance-r)/sw
+    else:
+        phi = longitude + (omega*r)/sw
 
     return phi, r
 
 # ----------------------------------------------------------------------------------------
 
 def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title='', r_s=2.5, \
-                   resolution=1000, vary=False, n_varies=2, save=False):
+                    vary=False, n_varies=1, save=False):
     '''
     Produces a figure of the heliosphere in polar coordinates with logarithmic r-axis outside the pfss.
     Also tracks an open field line down to photosphere given a point on the pfss.
@@ -838,7 +857,7 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
     if isinstance(sw,list):
         phis, rs = [], []
         for i in range(len(sw)):
-            phi, r = parker_spiral(sw_norm[i], distance_norm[i], longitude[i], resolution)
+            phi, r = parker_spiral(sw_norm[i], distance_norm[i], longitude[i], resolution=1000)
             phis.append(phi)
             rs.append(r)
 
@@ -847,7 +866,7 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
         sc_footpoint = [sc_footphis,sc_footrs]
 
     else:
-        phi, r = parker_spiral(sw_norm, distance_norm, longitude, resolution)
+        phi, r = parker_spiral(sw_norm, distance_norm, longitude, resolution=1000)
         sc_footpoint = [phi[0],r[0]]
 
     #----------------------------------------------------------
@@ -871,6 +890,7 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
         else:
             fline_triplets, fline_objects, varyfline_triplets, varyfline_objects = vary_flines(sc_footpoint[0], latitude, hmimap, n_varies)
 
+
     #if no varying, then just get one field line from get_field_line_coords()
     else:
         fline_triplets, fline_objects = get_field_line_coords(sc_footpoint[0], latitude, hmimap)
@@ -879,24 +899,19 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
     #they are located in fline_triplets[i][j]
 
     #source surface:
-    theta = 2*np.pi*np.linspace(0,1,resolution)
-    ss = np.ones(resolution)*r_s
-
-    #plot settings before figure is made
-    plt.rcParams['axes.linewidth'] = 1.5
-    plt.rcParams['font.size'] = 20
-    plt.rcParams['agg.path.chunksize'] = 20000
+    theta = 2*np.pi*np.linspace(0,1,200)
+    ss = np.ones(200)*r_s
 
     #Plotting commands------------------------------------------------------------->
     fig, ax = plt.subplots(figsize = [19,17], subplot_kw={'projection': 'polar'})
 
     #plot the source_surface and solar surface
     ax.plot(theta, ss, c='k', ls='--', zorder=1)
-    ax.plot(theta, np.ones(resolution), c='darkorange', lw=2.5, zorder=1)
+    ax.plot(theta, np.ones(200), c='darkorange', lw=2.5, zorder=1)
     
     #plot the 30 and 60 deg lines on the Sun
-    ax.plot(theta, np.ones(len(theta))*0.866, c='darkgray', lw=0.5, zorder=1) #cos(30) = 0.866(O)
-    ax.plot(theta, np.ones(len(theta))*0.500, c='darkgray', lw=0.5, zorder=1) #cos(60) = 0.5
+    ax.plot(theta, np.ones(len(theta))*0.866, c='darkgray', lw=0.5, zorder=1) #cos(30deg) = 0.866(O)
+    ax.plot(theta, np.ones(len(theta))*0.500, c='darkgray', lw=0.5, zorder=1) #cos(60deg) = 0.5
 
     #plot the spiral
     if isinstance(sw,list):
@@ -953,41 +968,58 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
     rlabels = ['1', '2.5', r'$10^1$', r'$10^2$']
     ax.set_yticklabels(rlabels)
 
-
     #plt.legend(loc=10, bbox_to_anchor=(-0.1, 0.1))
 
     #create the colorbar displaying values of the last fieldline plotted
     cb = fig.colorbar(fieldline)
-
+    
     #@TODO: shrink the colorbar andmove it to the top right corner
-
+    
     #colorbar is the last object created -> it is the final index in the list of axes
     cb_ax = fig.axes[-1]
     cb_ax.set_ylabel('latitude [deg]')
-
+    
     #before adding txtboxes, make sure that sc_footpoint is of proper shape
     if(isinstance(sc_footpoint[0],float)):
         display_sc_footpoint = [[sc_footpoint[0]],[sc_footpoint[1]]]
         latitude = [latitude]
 
-    #add textbox for footpoint coordinates
+    #also add magnetic polarity info to display:
+    display_polarities = []
+    for fline in fline_objects:
+        display_polarities.append(int(fline.polarity))
+    
+    
+    #txtbox stuff----------->
     txtsize = 12
+    
+    #Make legend for abbreviations:
+    legendlabel = "ABBREVIATIONS \nPS: Photosphere \nSS: Source Surface \nFP: Footpoint \nP: Polarity"
+    legendbox = AnchoredText(f"{legendlabel}", prop=dict(size=txtsize+1), frameon=True, loc=(10), bbox_to_anchor=(92,880)) #float('1.{}'.format(i))
+    legendbox.patch.set_boxstyle("round, pad=0., rounding_size=0.2")
+    legendbox.patch.set_linewidth(3.0)
+    legendbox.patch.set_edgecolor(get_color(None))
+    ax.add_artist(legendbox)
+    
+    #add textbox for footpoint coordinates
     if(names is not None):
-        for i in range(len(display_fl_footpoints)): 
-            plabel = AnchoredText(f"{names[i]}, sw={int(sw[i])} \n PHOTOSPHERE FOOTPOINT \n({display_fl_sourcepoints[i][1]},{display_fl_sourcepoints[i][2]}) \n SOURCE SURF FOOTPOINT \n({display_fl_footpoints[i][1]},{display_fl_footpoints[i][2]})", prop=dict(size=txtsize+1), frameon=True, loc=(10), bbox_to_anchor=(100, (850-i*100) )) #float('1.{}'.format(i))
+        for i in range(len(display_fl_footpoints)):
+            plabel = AnchoredText(f"{names[i]}, sw={int(sw[i])} km/s\nPS FP = ({display_fl_sourcepoints[i][1]},{display_fl_sourcepoints[i][2]}) \nSS FP = ({display_fl_footpoints[i][1]},{display_fl_footpoints[i][2]}) \nP: {display_polarities[i]}", 
+                                  prop=dict(size=txtsize+1), frameon=True, loc=(2), bbox_to_anchor=(15, (840-i*75) )) #float('1.{}'.format(i))
             plabel.patch.set_boxstyle("round, pad=0., rounding_size=0.2")
             plabel.patch.set_linewidth(3.0)
             plabel.patch.set_edgecolor(get_color(names[i]))
             ax.add_artist(plabel)
     else:
-        for i in range(len(display_fl_footpoints)): 
-            plabel = AnchoredText(f"PHOTOSPHERE FOOTPOINT \n({display_fl_sourcepoints[i][1]},{display_fl_sourcepoints[i][2]}) \n SOURCE SURF FOOTPOINT \n({display_fl_footpoints[i][1]},{display_fl_footpoints[i][2]}) \n SPACECRAFT FOOTPOINT \n ({np.round(np.rad2deg(sc_footpoint[0][i]),1)},{np.round(latitude[i],1)})", prop=dict(size=txtsize+1), frameon=True, loc=(10), bbox_to_anchor=(100, (850-i*100) )) #float('1.{}'.format(i))
+        for i in range(len(display_fl_footpoints)):
+            plabel = AnchoredText(f"PS FP = ({display_fl_sourcepoints[i][1]},{display_fl_sourcepoints[i][2]}) \n SS FP = ({display_fl_footpoints[i][1]},{display_fl_footpoints[i][2]}) \n SPACECRAFT FOOTPOINT \n ({np.round(np.rad2deg(sc_footpoint[0][i]),1)},{np.round(latitude[i],1)})", 
+                                  prop=dict(size=txtsize+1), frameon=True, loc=(10), bbox_to_anchor=(100, (800-i*75) )) #float('1.{}'.format(i))
             plabel.patch.set_boxstyle("round, pad=0., rounding_size=0.2")
             plabel.patch.set_linewidth(1.5)
             plabel.patch.set_edgecolor(get_color(names[i]))
             ax.add_artist(plabel)
 
-    #set the title of the figure to be the date of the hmimap
+    #set the title of the figure
     plt.title(title)
 
     if(save):
@@ -1001,6 +1033,87 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
         return [fline_objects, varyfline_objects]
     else:
         return fline_objects
+
+# ---------------------------------------------------------------------------
+
+def field_line_info_to_df(flines, names):
+    '''
+    Takes a list of field line objects and names, and assembles
+    a pd dataframe that includes the footpoint and head of each magnetic
+    field line and polarity corresponding to each sc.
+    '''
+
+    if not isinstance(names, np.ndarray):
+        names = np.array(names)
+
+    if len(names) != len(flines):
+
+        for name in names:
+            if(name is not None):
+                raise Exception("The list of names does not match the list of field line objects.")
+
+        names = np.array([None]*len(flines))
+
+
+    #init arrays to store into dataframe
+    polarities = np.array([])
+    photosphere_lons = np.array([])
+    photosphere_lats = np.array([])
+    pfss_lons = np.array([])
+    pfss_lats = np.array([])
+
+    for line in flines:
+
+        polarities = np.append(polarities,line.polarity)
+        
+        coordinates = check_field_line_alignment(line.coords)
+
+        photospheric_footpoint = (coordinates.lon.value[0], coordinates.lat.value[0])
+        photosphere_lons = np.append(photosphere_lons,photospheric_footpoint[0])
+        photosphere_lats = np.append(photosphere_lats,photospheric_footpoint[1])
+
+        pfss_footpoint = (coordinates.lon.value[-1], coordinates.lat.value[-1])
+        pfss_lons = np.append(pfss_lons, pfss_footpoint[0])
+        pfss_lats = np.append(pfss_lats, pfss_footpoint[1])
+        
+
+    data_dict = {'names': names,
+                'footpoint lon': photosphere_lons,
+                'footpoint lat': photosphere_lats,
+                'pfss lon': pfss_lons,
+                'pfss lat': pfss_lats,
+                'polarity': polarities}
+    
+    df = pd.DataFrame(data=data_dict)
+    
+    return df
+    
+# ---------------------------------------------------------------------------
+
+def df_to_file(df, filename: str):
+    '''
+    Writes a dataframe in to a csv file
+    '''
+    
+    if not isinstance(filename,str):
+        raise Exception("The file name must be string.")
+    
+    current_directory = os.getcwd()
+    
+    filestr = f"{current_directory}/{filename}.csv"
+    
+    df.to_csv(filestr)
+    print(f"Created file {filename}.csv to {current_directory}/")
+
+# ---------------------------------------------------------------------------
+
+def write_info_to_csv(flines, names=[None], filename='magnetic_info'):
+    
+    #first assemble a dataframe from the field line object
+    coords_df = field_line_info_to_df(flines, names)
+    
+    #write the df into csv
+    df_to_file(coords_df, filename)
 
 # ---------------------------------------------------------------------------
 
@@ -1026,7 +1139,7 @@ def get_sc_data(csvfile: str):
     
     return names, sw, dist, lons, lats
 
-# ========================================================================================
+#============================================================================================================================
 
 #============================================================================================================================
 #this will be ran when importing
