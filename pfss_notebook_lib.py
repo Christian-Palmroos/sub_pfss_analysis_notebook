@@ -5,7 +5,7 @@ for seeking the footpoints of IMF field lines connecting back to the photosphere
 @Author: Christian Palmroos
          <chospa@utu.fi>
 
-Last updated: 2022-03-02
+Last updated: 2022-03-10
 '''
 
 #imports:
@@ -276,7 +276,7 @@ def orthodrome(lon1,lat1, lon2,lat2, rad=False) -> float:
 
 def ortho_to_points(lon1, lat1, orthodrome, rad=False):
     '''
-    Calculates a lon/lat pair from a central point and an orthodrome(=total angular separation between points)
+    Calculates a lon/lat pair from a reference point
     '''
 
     if rad == False:
@@ -327,18 +327,20 @@ def get_pfss_hmimap(filepath, email, carrington_rot, date, rss=2.5, nrho=35):
     '''
 
     time = a.Time(date, date)
-    pfname =  filepath+"PFSS_output_"+ str(time.start.datetime.date())+'_CR'+str(carrington_rot)+'_SS'+str(rss)+'_nrho'+str(nrho)+'.p'
+    pfname =  f"{filepath}PFSS_output_{str(time.start.datetime.date())}_CR{str(carrington_rot)}_SS{str(rss)}_nrho{str(nrho)}.p"
 
     #check if PFSS file already exists locally:
+    print(f"Searching for PFSS file from {filepath}")
     try:
         with open(pfname, 'rb') as f:
             u = pickle._Unpickler(f)
             u.encoding = 'latin1'
             output = u.load()
-        print('Found pickled PFSS file')
+        print("Found pickled PFSS file!")
 
     #if not, then download MHI mag, calc. PFSS, and save as picle file for next time
     except FileNotFoundError:
+        print(f"PFSS file not found from {filepath}\nDownloading...")
         series = a.jsoc.Series('hmi.synoptic_mr_polfil_720s')
         crot = a.jsoc.PrimeKey('CAR_ROT', carrington_rot)
         result = Fido.search(time, series, crot, a.jsoc.Notify(email))
@@ -613,34 +615,48 @@ def multicolorline(x, y, cvals, ax, vmin=-90, vmax=90):
 
 # ----------------------------------------------------------------------------------------
 
-def plot3d(field_lines):
+def plot3d(field_lines, names=['empty'], color_code='polarity'):
     
     if not isinstance(field_lines, list):
         field_lines = [field_lines]
         
     if isinstance(field_lines[0],list):
-        field_lines = flatten(field_lines)
+        modulator = len(field_lines[1])//len(names) #modulates the order of field lines and the colors picked from c_list
+        field_lines = flatten_flines(field_lines, modulator)
+
+    if color_code=='object':
+        num_objects = len(names)
+        if len(field_lines) % num_objects != 0:
+            raise Exception("Names do not match field lines")
+        c_list = [get_color(x) for x in names]
+    elif color_code=='polarity':
+        colors = {0: 'black', -1: 'tab:blue', 1: 'tab:red'}
+    else:
+        raise Exception("Choose either 'polarity' or 'object' as the color coding.")
+
 
     fig, axarr = plt.subplots(subplot_kw={"projection": "3d"})
-
+    
     axarr.set_box_aspect((1, 1, 1))
-
-    r_sun, r_ss = 1.0, 2.5
     
     #Draw the Sun
     u, v = np.mgrid[0:2*np.pi:20j, 0:np.pi:10j]
     x = np.cos(u)*np.sin(v)
     y = np.sin(u)*np.sin(v)
     z = np.cos(v)
-    axarr.plot_wireframe(x*r_sun, y*r_sun, z*r_sun, color="darkorange")
+    axarr.plot_wireframe(x*1.0, y*1.0, z*1.0, color="darkorange")
     axarr.set_xlim(-2,2)
     axarr.set_ylim(-2,2)
     axarr.set_zlim(-2,2)
     
-    for field_line in field_lines:
+    for i, field_line in enumerate(field_lines):
             coords = field_line.coords
             coords.representation = 'cartesian'
-            color = {0: 'black', -1: 'tab:blue', 1: 'tab:red'}.get(field_line.polarity)
+            
+            if color_code=='polarity':
+                color = colors.get(field_line.polarity)
+            if color_code=='object':
+                color = c_list[i//(modulator+1)]
             axarr.plot(coords.x / const.R_sun,
             coords.y / const.R_sun,
             coords.z / const.R_sun,
@@ -653,25 +669,42 @@ def plot3d(field_lines):
 
 # ----------------------------------------------------------------------------------------
 
-def draw_fieldlines(field_lines, frame='yz', save=False):
+def draw_fieldlines(field_lines, rss=2.5, frame='yz', color_code='polarity', names=[], save=False):
 
     import matplotlib.patches as mpatch
-    
+
     #check if there's a list inside a list, if there is -> flatten
+    #NOTICE: flatten() messes up the order of the field lines, putting the original flines
+    #first and then the varied field lines
     if isinstance(field_lines[0],list):
-        field_lines = flatten(field_lines)
+        modulator = len(field_lines[1])//len(names) #modulates the order of field lines and the colors picked from c_list
+        field_lines = flatten_flines(field_lines, modulator)
 
     fig, ax = plt.subplots(figsize=[10,10])
-    r_ss = 2.5
-
     ax.set_aspect('equal')
+
+    #set color coding to field lines
+    if color_code=='object':
+        num_objects = len(names)
+        if len(field_lines) % num_objects != 0:
+            raise Exception("Names do not match field lines")
+        c_list = [get_color(x) for x in names]
+    elif color_code=='polarity':
+        colors = {0: 'black', -1: 'tab:blue', 1: 'tab:red'}
+    else:
+        raise Exception("Choose either 'polarity' or 'object' as the color coding.")
 
     if(isinstance(field_lines,list)):
 
-        for field_line in field_lines:
+        for i, field_line in enumerate(field_lines):
             coords = field_line.coords
             coords.representation = 'cartesian'
-            color = {0: 'black', -1: 'tab:blue', 1: 'tab:red'}.get(field_line.polarity)
+
+            if color_code == 'polarity':
+                color = colors.get(field_line.polarity)
+            if color_code == 'object':
+                color = c_list[i//(modulator+1)]
+
             if(frame=='yz'):
                 ax.plot(coords.y / const.R_sun, coords.z / const.R_sun, color=color)
                 projection = 'POV: Carrington longitude 0'
@@ -703,7 +736,7 @@ def draw_fieldlines(field_lines, frame='yz', save=False):
             raise Exception("Invalid frame")
 
     ax.add_patch(mpatch.Circle((0,0), 1, color='darkorange', lw=2.0, fill=False))
-    ax.add_patch(mpatch.Circle((0,0), r_ss, color='k', linestyle='--', fill=False))
+    ax.add_patch(mpatch.Circle((0,0), rss, color='k', linestyle='--', fill=False))
 
     plt.title(projection)
 
@@ -711,6 +744,25 @@ def draw_fieldlines(field_lines, frame='yz', save=False):
         plt.savefig('overhead.png')
 
     plt.show()
+
+# ----------------------------------------------------------------------------------------
+
+def flatten_flines(field_lines, modulator):
+    '''
+    Flattens a list of field_lines in such a way that the order of
+    corresponding field lines and their varied counterparts is preserved.
+    '''
+    flines0, flines1 = field_lines[0], field_lines[1]
+    flines_all = []
+    #append the original field line, and then all the varied field lines corresponding to
+    #that original field line in order
+    for i in range(len(flines0)):
+        flines_all.append(flines0[i])
+        for j in range(modulator):
+            index = i*modulator+j #index takes into account that there are a modulator amount of dummy flines
+            flines_all.append(flines1[index])
+
+    return flines_all
 
 # ----------------------------------------------------------------------------------------
 
@@ -903,7 +955,7 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
     ss = np.ones(200)*r_s
 
     #Plotting commands------------------------------------------------------------->
-    fig, ax = plt.subplots(figsize = [19,17], subplot_kw={'projection': 'polar'})
+    fig, ax = plt.subplots(figsize = [23,17], subplot_kw={'projection': 'polar'})
 
     #plot the source_surface and solar surface
     ax.plot(theta, ss, c='k', ls='--', zorder=1)
@@ -1065,7 +1117,7 @@ def field_line_info_to_df(flines, names):
     for line in flines:
 
         polarities = np.append(polarities,line.polarity)
-        
+
         coordinates = check_field_line_alignment(line.coords)
 
         photospheric_footpoint = (coordinates.lon.value[0], coordinates.lat.value[0])
@@ -1075,17 +1127,17 @@ def field_line_info_to_df(flines, names):
         pfss_footpoint = (coordinates.lon.value[-1], coordinates.lat.value[-1])
         pfss_lons = np.append(pfss_lons, pfss_footpoint[0])
         pfss_lats = np.append(pfss_lats, pfss_footpoint[1])
-        
 
-    data_dict = {'names': names,
-                'footpoint lon': photosphere_lons,
-                'footpoint lat': photosphere_lats,
-                'pfss lon': pfss_lons,
-                'pfss lat': pfss_lats,
-                'polarity': polarities}
-    
+
+    data_dict = {'Observing object': names,
+                'Solar surface \nfootpoint lon': photosphere_lons,
+                'Solar surface \nfootpoint lat': photosphere_lats,
+                'PFSS \nfootpoint lon': pfss_lons,
+                'PFSS \nfootpoint lat': pfss_lats,
+                'Magnetic Polarity': polarities}
+
     df = pd.DataFrame(data=data_dict)
-    
+
     return df
     
 # ---------------------------------------------------------------------------
