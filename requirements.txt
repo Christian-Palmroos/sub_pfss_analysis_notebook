@@ -1,5 +1,6 @@
 astropy
 cmasher
+drms
 lxml
 matplotlib
 numpy
