@@ -328,7 +328,7 @@ def arcsec_to_carrington(arc_x, arc_y, time):
 
 # ----------------------------------------------------------------------------------------
 
-
+@st.cache(persist=True, allow_output_mutation=True)
 def get_pfss_hmimap(filepath, email, carrington_rot, date, rss=2.5, nrho=35):
     '''
     downloading hmi map or calculating the PFSS solution
