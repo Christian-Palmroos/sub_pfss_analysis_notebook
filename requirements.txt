@@ -1,0 +1,8 @@
+astropy
+cmasher
+matplotlib
+numpy
+pandas
+pfsspy
+streamlit
+sunpy
