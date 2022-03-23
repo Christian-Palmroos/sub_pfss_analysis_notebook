@@ -11,10 +11,10 @@ Last updated: 2022-03-15
 #imports:
 import astropy.constants as const
 import astropy.units as units
-import astropy.coordinates
-import astropy.units as u
+# import astropy.coordinates
+# import astropy.units as u
 import matplotlib.pyplot as plt
-import matplotlib.pylab as pl
+# import matplotlib.pylab as pl
 import matplotlib.colors as mcolors
 import cmasher as cmr
 import numpy as np
@@ -31,8 +31,8 @@ from astropy.coordinates import SkyCoord
 #from pfsspy import coords
 from pfsspy import tracing
 #from pfsspy.sample_data import get_gong_map
-from mpl_toolkits.mplot3d import Axes3D
-from matplotlib import cm
+# from mpl_toolkits.mplot3d import Axes3D
+# from matplotlib import cm
 from matplotlib.offsetbox import AnchoredText
 from sunpy.net import Fido, attrs as a
 #from sunpy.coordinates import frames
@@ -314,7 +314,7 @@ def get_pfss_hmimap(filepath, email, carrington_rot, date, rss=2.5, nrho=35):
 
     #if not, then download MHI mag, calc. PFSS, and save as picle file for next time
     except FileNotFoundError:
-        print(f"PFSS file not found.\nDownloading...")
+        print("PFSS file not found.\nDownloading...")
         series = a.jsoc.Series('hmi.synoptic_mr_polfil_720s')
         crot = a.jsoc.PrimeKey('CAR_ROT', carrington_rot)
         result = Fido.search(time, series, crot, a.jsoc.Notify(email))
@@ -550,7 +550,7 @@ def multicolorline(x, y, cvals, ax, vmin=-90, vmax=90):
     '''
 
     from matplotlib.collections import LineCollection
-    from matplotlib.colors import ListedColormap, BoundaryNorm
+    # from matplotlib.colors import ListedColormap, BoundaryNorm
 
     # Create a set of line segments so that we can color them individually
     # This creates the points as a N x 1 x 2 array so that we can stack points
@@ -624,17 +624,17 @@ def plot3d(field_lines, names, color_code='polarity'):
     axarr.set_zlim(-2,2)
     
     for i, field_line in enumerate(field_lines):
-            coords = field_line.coords
-            coords.representation = 'cartesian'
-            
-            if color_code=='polarity':
-                color = colors.get(field_line.polarity)
-            if color_code=='object':
-                color = c_list[i//(modulator+1)]
-            axarr.plot(coords.x / const.R_sun,
-            coords.y / const.R_sun,
-            coords.z / const.R_sun,
-            color=color, linewidth=1)
+        coords = field_line.coords
+        coords.representation = 'cartesian'
+        
+        if color_code=='polarity':
+            color = colors.get(field_line.polarity)
+        if color_code=='object':
+            color = c_list[i//(modulator+1)]
+        axarr.plot(coords.x / const.R_sun,
+        coords.y / const.R_sun,
+        coords.z / const.R_sun,
+        color=color, linewidth=1)
     
     try:
         axarr.set_aspect('equal', adjustable='box')
@@ -836,8 +836,8 @@ def parker_spiral(sw, distance, longitude, resolution, endpoint=2.5, backtrack=T
 
 # ----------------------------------------------------------------------------------------
 
-def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title='', rss=2.5, \
-                    vary=False, n_varies=1, save=False):
+def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title='', rss=2.5,
+                   vary=False, n_varies=1, save=False):
     '''
     Produces a figure of the heliosphere in polar coordinates with logarithmic r-axis outside the pfss.
     Also tracks an open field line down to photosphere given a point on the pfss.
@@ -1142,29 +1142,6 @@ def write_info_to_csv(flines, names=[None], filename='magnetic_info'):
     #write the df into csv
     df_to_file(coords_df, filename)
 
-# ---------------------------------------------------------------------------
-
-def get_sc_data(csvfile: str):
-    '''
-    Reads the contents of solar-mach produced csv file, and returns lists
-    of necessary data to run pfss field line tracing analysis.
-    
-    csvfile: str, the name of the csv file one wants to read
-    '''
-    import pandas as pd
-
-    if type(csvfile) is not str:
-        raise TypeError("File name is not a string.")
-
-    csvdata = pd.read_csv(csvfile)
-    
-    names = list(csvdata['Spacecraft/Body'])
-    lons = list(csvdata['Carrington Longitude (°)'])
-    lats = list(csvdata['Latitude (°)'])
-    dist = au_to_km(list(csvdata['Heliocentric Distance (AU)']))
-    sw = list(csvdata['Vsw'])
-    
-    return names, sw, dist, lons, lats
 
 #============================================================================================================================
 
@@ -1176,7 +1153,7 @@ def heeq2hgc(xyz_list, obstimes, observer='earth', unit=None, returns='objects')
     '''
     
     from astropy.coordinates import SkyCoord, CartesianRepresentation
-    from sunpy.coordinates import HeliographicCarrington
+    # from sunpy.coordinates import HeliographicCarrington
     import astropy.units as units
 
     if unit is None:
@@ -1211,7 +1188,7 @@ def arcsec_to_carrington(arc_x, arc_y, time):
     from astropy.coordinates import SkyCoord
     import astropy.units as u
     from sunpy.coordinates import frames
-    from sunpy.coordinates import get_horizons_coord
+    # from sunpy.coordinates import get_horizons_coord
 
     """
     transforms arcsec on the solar disk (as seen from Earth) to Carrington longitude & latitude    Parameters
@@ -1235,6 +1212,7 @@ def arcsec_to_carrington(arc_x, arc_y, time):
     lat = Carr.lat.value
 
     return lon, lat
+
 
 #============================================================================================================================
 #this will be ran when importing
