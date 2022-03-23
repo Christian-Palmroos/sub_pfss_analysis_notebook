@@ -38,20 +38,20 @@ st.sidebar.subheader('Define SC & corresponding parameters')
 with st.sidebar.container():
     body_list = \
         st.sidebar.text_area('Bodies/spacecraft',
-                            'STEREO A, Solar Orbiter',
-                            height=50)
+                             'STEREO A, Solar Orbiter',
+                             height=50)
     vsw_list = \
         st.sidebar.text_area('Solar wind speed per body/SC (mind the order!)', '400, 400',
-                            height=50)
+                             height=50)
     distance_list = \
         st.sidebar.text_area('Distance in AU per body/SC (mind the order!)', '0.9583, 0.76',
-                            height=50) 
+                             height=50)
     long_list = \
         st.sidebar.text_area('Longitude per body/SC (mind the order!)', '232.716, 2',
-                            height=50)  
+                             height=50)
     lat_list = \
         st.sidebar.text_area('Latitude per body/SC (mind the order!)', '7.169, 0',
-                            height=50)                           
+                             height=50)
     body_list = body_list.split(',')
     vsw_list = vsw_list.split(',')
     distance_list = distance_list.split(',')
@@ -60,7 +60,7 @@ with st.sidebar.container():
     body_list = [body_list[i].strip() for i in range(len(body_list))]
 
     wrong_value = False
-    try: 
+    try:
         vsw_list = [int(vsw_list[i].strip()) for i in range(len(vsw_list))]
         distance_list = [float(distance_list[i].strip()) for i in range(len(distance_list))]
         long_list = [float(long_list[i].strip()) for i in range(len(long_list))]
@@ -93,7 +93,7 @@ if st.button('Run PFSS for selected parameters'):
 
         # No need to touch the function call; just run the cell
         flines = symlog_pspiral(sw=sw, distance=distance, longitude=lon, latitude=lat, hmimap=hmimap, names=names, title=title,
-                                vary=vary, n_varies=n_varies, save=False)
+                                vary=vary, n_varies=n_varies, save=False, use_streamlit=True)
 
 with st.expander("Parameters", expanded=True):
     st.write(f'carrington_rot = {carrington_rot}')

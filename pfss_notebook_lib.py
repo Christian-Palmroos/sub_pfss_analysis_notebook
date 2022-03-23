@@ -282,7 +282,8 @@ def ortho_to_points(lon1, lat1, orthodrome, rad=False):
 
     return lon2, lat2
 
-
+# include check if inside streamlit here:
+# @st.cache(persist=True, allow_output_mutation=True)
 def get_pfss_hmimap(filepath, email, carrington_rot, date, rss=2.5, nrho=35):
     '''
     downloading hmi map or calculating the PFSS solution
@@ -807,7 +808,7 @@ def parker_spiral(sw, distance, longitude, resolution, endpoint=2.5, backtrack=T
 
 
 def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title='', rss=2.5,
-                   vary=False, n_varies=1, save=False):
+                   vary=False, n_varies=1, save=False, use_streamlit=False):
     '''
     Produces a figure of the heliosphere in polar coordinates with logarithmic r-axis outside the pfss.
     Also tracks an open field line down to photosphere given a point on the pfss.
@@ -1019,7 +1020,13 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
     if(save):
         plt.savefig('testfig.png', transparent=False, facecolor='white', bbox_inches='tight')
 
-    plt.show()
+    # this should be replaced with a spophisticated check whether code is runned inside streamlit:
+    # if using streamlit, send plot to streamlit output, else call plt.show()
+    if use_streamlit:
+        import streamlit as st
+        st.pyplot(fig)  # , dpi=200)
+    else:
+        plt.show()
 
     # the function returns all the calculated field line objects, which include many attributes
     # of the field lines such as coordinates, polarity, and wether they are open or closed
