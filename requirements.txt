@@ -1,0 +1,11 @@
+astropy
+cmasher
+drms
+lxml
+matplotlib
+numpy
+pandas
+pfsspy
+streamlit
+sunpy
+zeep
