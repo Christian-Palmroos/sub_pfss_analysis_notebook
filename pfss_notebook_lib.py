@@ -5,7 +5,7 @@ for seeking the footpoints of IMF field lines connecting back to the photosphere
 @Author: Christian Palmroos
          <chospa@utu.fi>
 
-Last updated: 2022-03-10
+Last updated: 2022-03-15
 '''
 
 #imports:
@@ -88,8 +88,10 @@ def get_color(key: str = None) -> str:
                 'voyager 2': 'midnightblue',
                 'default': 'k'}
 
-
-    return color_dict[key]
+    try:
+        return color_dict[key]
+    except KeyError:
+        return color_dict['default']
 
 # ----------------------------------------------------------------------------------------
 
@@ -289,35 +291,7 @@ def ortho_to_points(lon1, lat1, orthodrome, rad=False):
 
 # ----------------------------------------------------------------------------------------
 
-def arcsec_to_carrington(arc_x, arc_y, time):
 
-    from astropy.coordinates import SkyCoord#sky_coordinate
-    import astropy.units as u
-    from sunpy.coordinates import frames
-    from sunpy.coordinates import get_horizons_coord
-
-    """
-    transforms arcsec on the solar disk (as seen from Earth) to Carrington longitude & latitude    Parameters
-    ----------
-    arc_x : float
-        Helioprojective x coordinate in arcsec
-    arc_y : float
-        Helioprojective y coordinate in arcsec
-    time : string
-        date and time, for example: '2021-04-17 16:00'
-
-    Returns
-    -------
-    lon, lat : float 
-        longitude and latitude in Carrington coordinates
-    """
-
-    c = SkyCoord(arc_x*u.arcsec, arc_y*u.arcsec, frame=frames.Helioprojective, obstime=time, observer="earth")
-    Carr = c.transform_to(frames.HeliographicCarrington(observer="Sun"))
-    lon = Carr.lon.value
-    lat = Carr.lat.value
-
-    return lon, lat
 
 # ----------------------------------------------------------------------------------------
 
@@ -327,12 +301,12 @@ def get_pfss_hmimap(filepath, email, carrington_rot, date, rss=2.5, nrho=35):
     '''
 
     time = a.Time(date, date)
-    pfname =  f"{filepath}PFSS_output_{str(time.start.datetime.date())}_CR{str(carrington_rot)}_SS{str(rss)}_nrho{str(nrho)}.p"
+    pfname =  f"PFSS_output_{str(time.start.datetime.date())}_CR{str(carrington_rot)}_SS{str(rss)}_nrho{str(nrho)}.p"
 
     #check if PFSS file already exists locally:
     print(f"Searching for PFSS file from {filepath}")
     try:
-        with open(pfname, 'rb') as f:
+        with open(f"{filepath}/{pfname}", 'rb') as f:
             u = pickle._Unpickler(f)
             u.encoding = 'latin1'
             output = u.load()
@@ -340,7 +314,7 @@ def get_pfss_hmimap(filepath, email, carrington_rot, date, rss=2.5, nrho=35):
 
     #if not, then download MHI mag, calc. PFSS, and save as picle file for next time
     except FileNotFoundError:
-        print(f"PFSS file not found from {filepath}\nDownloading...")
+        print(f"PFSS file not found.\nDownloading...")
         series = a.jsoc.Series('hmi.synoptic_mr_polfil_720s')
         crot = a.jsoc.PrimeKey('CAR_ROT', carrington_rot)
         result = Fido.search(time, series, crot, a.jsoc.Notify(email))
@@ -406,7 +380,7 @@ def circle_around(x,y,n,r=0.1):
 
 # ----------------------------------------------------------------------------------------
 
-def vary_flines(lon, lat, hmimap, n_varies):
+def vary_flines(lon, lat, hmimap, n_varies, rss):
     '''
     Finds a set of sub-pfss fieldlines connected to or very near a single footpoint on the pfss.
     
@@ -440,7 +414,7 @@ def vary_flines(lon, lat, hmimap, n_varies):
     pointlist = np.array([lons,lats])
 
     #trace fieldlines from all of these points
-    varycoords, varyflines = get_field_line_coords(pointlist[0],pointlist[1],hmimap)
+    varycoords, varyflines = get_field_line_coords(pointlist[0],pointlist[1],hmimap, rss)
 
     #because the original fieldlines and the varied ones are all in the same arrays,
     #extract the varied ones to their own arrays
@@ -485,7 +459,7 @@ def get_coord_values(field_line):
 
 # ----------------------------------------------------------------------------------------
 
-def get_field_line_coords(longitude, latitude, hmimap):
+def get_field_line_coords(longitude, latitude, hmimap, rss):
     '''
     Returns triplets of open magnetic field line coordinates, and the field line object itself
     
@@ -514,7 +488,7 @@ def get_field_line_coords(longitude, latitude, hmimap):
         while(True):
 
             #trace a field line downward from the point lon,lat on the pfss
-            fline = trace_field_line(longitude[i], latitude[i], hmimap)
+            fline = trace_field_line(longitude[i], latitude[i], hmimap, rss)
 
             radius0 = fline.coords.radius[0].value
             radius9 = fline.coords.radius[-1].value
@@ -615,7 +589,7 @@ def multicolorline(x, y, cvals, ax, vmin=-90, vmax=90):
 
 # ----------------------------------------------------------------------------------------
 
-def plot3d(field_lines, names=['empty'], color_code='polarity'):
+def plot3d(field_lines, names, color_code='polarity'):
     
     if not isinstance(field_lines, list):
         field_lines = [field_lines]
@@ -798,7 +772,7 @@ def check_field_line_alignment(coordinates):
 
 # ----------------------------------------------------------------------------------------
 
-def trace_field_line(lon0, lat0, hmimap, rad=True):
+def trace_field_line(lon0, lat0, hmimap, rss, rad=True):
     '''
     Traces a single open magnetic field line at coordinates (lon0,lat0) on the pfss down
     to the photosphere
@@ -810,7 +784,7 @@ def trace_field_line(lon0, lat0, hmimap, rad=True):
         lon0 = np.deg2rad(lon0)
 
     #start tracing from the pfss height
-    height = 2.5*const.R_sun
+    height = rss*const.R_sun
     tracer = tracing.PythonTracer()
 
     #add unit to longitude and latitude, so that SkyCoord understands them
@@ -854,6 +828,7 @@ def parker_spiral(sw, distance, longitude, resolution, endpoint=2.5, backtrack=T
     #backtracking means going from sc to source surface
     if backtrack:
         phi = longitude + (omega)*(distance-r)/sw
+    #if not backtracking, solve parker spiral from pfss outward all the way to max distance
     else:
         phi = longitude + (omega*r)/sw
 
@@ -861,7 +836,7 @@ def parker_spiral(sw, distance, longitude, resolution, endpoint=2.5, backtrack=T
 
 # ----------------------------------------------------------------------------------------
 
-def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title='', r_s=2.5, \
+def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title='', rss=2.5, \
                     vary=False, n_varies=1, save=False):
     '''
     Produces a figure of the heliosphere in polar coordinates with logarithmic r-axis outside the pfss.
@@ -909,7 +884,7 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
     if isinstance(sw,list):
         phis, rs = [], []
         for i in range(len(sw)):
-            phi, r = parker_spiral(sw_norm[i], distance_norm[i], longitude[i], resolution=1000)
+            phi, r = parker_spiral(sw_norm[i], distance_norm[i], longitude[i], resolution=1000, endpoint=rss)
             phis.append(phi)
             rs.append(r)
 
@@ -918,7 +893,7 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
         sc_footpoint = [sc_footphis,sc_footrs]
 
     else:
-        phi, r = parker_spiral(sw_norm, distance_norm, longitude, resolution=1000)
+        phi, r = parker_spiral(sw_norm, distance_norm, longitude, resolution=1000, endpoint=rss)
         sc_footpoint = [phi[0],r[0]]
 
     #----------------------------------------------------------
@@ -932,7 +907,7 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
             fline_triplets, fline_objects, varyfline_triplets, varyfline_objects = [], [], [], []
             for i, footpoint in enumerate(sc_footpoint[0]):
                 #Append doesn't work here, but a simple + does. I wonder why.
-                tmp_triplets, tmp_objects, varytmp_triplets, varytmp_objects = vary_flines(footpoint, latitude[i], hmimap, n_varies)
+                tmp_triplets, tmp_objects, varytmp_triplets, varytmp_objects = vary_flines(footpoint, latitude[i], hmimap, n_varies, rss)
                 fline_triplets = fline_triplets + tmp_triplets
                 fline_objects = fline_objects + tmp_objects
                 varyfline_triplets = varyfline_triplets + varytmp_triplets
@@ -940,19 +915,19 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
 
         #if only a single object, then just run vary_flines for it
         else:
-            fline_triplets, fline_objects, varyfline_triplets, varyfline_objects = vary_flines(sc_footpoint[0], latitude, hmimap, n_varies)
+            fline_triplets, fline_objects, varyfline_triplets, varyfline_objects = vary_flines(sc_footpoint[0], latitude, hmimap, n_varies, rss)
 
 
     #if no varying, then just get one field line from get_field_line_coords()
     else:
-        fline_triplets, fline_objects = get_field_line_coords(sc_footpoint[0], latitude, hmimap)
+        fline_triplets, fline_objects = get_field_line_coords(sc_footpoint[0], latitude, hmimap, rss)
 
     #we need fl_r, fl_lon, fl_lat
     #they are located in fline_triplets[i][j]
 
     #source surface:
     theta = 2*np.pi*np.linspace(0,1,200)
-    ss = np.ones(200)*r_s
+    ss = np.ones(200)*rss
 
     #Plotting commands------------------------------------------------------------->
     fig, ax = plt.subplots(figsize = [23,17], subplot_kw={'projection': 'polar'})
@@ -963,7 +938,7 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
     
     #plot the 30 and 60 deg lines on the Sun
     ax.plot(theta, np.ones(len(theta))*0.866, c='darkgray', lw=0.5, zorder=1) #cos(30deg) = 0.866(O)
-    ax.plot(theta, np.ones(len(theta))*0.500, c='darkgray', lw=0.5, zorder=1) #cos(60deg) = 0.5
+    ax.plot(theta, np.ones(len(theta))*0.500, c='darkgray', lw=0.5, zorder=1) #cos(60deg) = 0.5(0)
 
     #plot the spiral
     if isinstance(sw,list):
@@ -1010,14 +985,14 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
 
     r_max = 500e9 / sun_radius
     ax.set_rmax(r_max)
-    ax.set_rscale('symlog', linthresh=r_s)
+    ax.set_rscale('symlog', linthresh=rss)
 
     ax.grid(True)
     #ax.set_thetamin(0)
     #ax.set_thetamax(135)
-    ax.set_rticks([1.0, 2.5, 10.0, 100.0])
+    ax.set_rticks([1.0, rss, 10.0, 100.0])
     ax.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
-    rlabels = ['1', '2.5', r'$10^1$', r'$10^2$']
+    rlabels = ['1', str(rss), r'$10^1$', r'$10^2$']
     ax.set_yticklabels(rlabels)
 
     #plt.legend(loc=10, bbox_to_anchor=(-0.1, 0.1))
@@ -1192,6 +1167,74 @@ def get_sc_data(csvfile: str):
     return names, sw, dist, lons, lats
 
 #============================================================================================================================
+
+#Coordinate transformations:
+
+def heeq2hgc(xyz_list, obstimes, observer='earth', unit=None, returns='objects'):
+    '''
+    Takes a list of cartesian xyz coordinates in HEEQ (Heliospheric Earth Equatorial) frame and transforms them into HGC (HelioGraphic Carrington) coordinates.
+    '''
+    
+    from astropy.coordinates import SkyCoord, CartesianRepresentation
+    from sunpy.coordinates import HeliographicCarrington
+    import astropy.units as units
+
+    if unit is None:
+        unit = units.AU
+
+    if returns != 'objects' and returns != 'coordinates':
+        raise Exception("Choose either 'objects' or 'coordinates' for the function return.")
+
+    coordlist = []
+    for i, xyz in enumerate(xyz_list):
+        
+        #First seek a spherical stonyhurst representation for the HEEQ cartesian representation
+        c_stonyhurst = SkyCoord(CartesianRepresentation(xyz[0]*unit, xyz[1]*unit, xyz[2]*unit), 
+                                obstime=obstimes[i], 
+                                frame="heliographic_stonyhurst")
+
+        #Convert stonyhurst coordinates (effectively just longitude) to carrington coordinates
+        c_carrington = c_stonyhurst.transform_to(frames.HeliographicCarrington(observer='earth'))
+
+        coordlist.append(c_carrington)
+
+
+    if returns=='objects':
+        return coordlist
+    if returns=='coordinates':
+        return [(x.lon.value, x.lat.value, x.radius.value) for x in coordlist]
+
+#------------------------------------------------------------------------------------------------
+
+def arcsec_to_carrington(arc_x, arc_y, time):
+
+    from astropy.coordinates import SkyCoord
+    import astropy.units as u
+    from sunpy.coordinates import frames
+    from sunpy.coordinates import get_horizons_coord
+
+    """
+    transforms arcsec on the solar disk (as seen from Earth) to Carrington longitude & latitude    Parameters
+    ----------
+    arc_x : float
+        Helioprojective x coordinate in arcsec
+    arc_y : float
+        Helioprojective y coordinate in arcsec
+    time : string
+        date and time, for example: '2021-04-17 16:00'
+
+    Returns
+    -------
+    lon, lat : float 
+        longitude and latitude in Carrington coordinates
+    """
+
+    c = SkyCoord(arc_x*u.arcsec, arc_y*u.arcsec, frame=frames.Helioprojective, obstime=time, observer="earth")
+    Carr = c.transform_to(frames.HeliographicCarrington(observer="Sun"))
+    lon = Carr.lon.value
+    lat = Carr.lat.value
+
+    return lon, lat
 
 #============================================================================================================================
 #this will be ran when importing
