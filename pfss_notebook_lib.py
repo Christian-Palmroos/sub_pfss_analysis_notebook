@@ -1213,9 +1213,25 @@ def arcsec_to_carrington(arc_x, arc_y, time):
 
     return lon, lat
 
+#------------------------------------------------------------------------------------------------
+
+def _isnotebook():
+    # https://stackoverflow.com/a/39662359/2336056
+    try:
+        shell = get_ipython().__class__.__name__
+        if shell == 'ZMQInteractiveShell':
+            return True   # Jupyter notebook or qtconsole
+        elif shell == 'TerminalInteractiveShell':
+            return False  # Terminal running IPython
+        else:
+            return False  # Other type (?)
+    except NameError:
+        return False
+
 
 #============================================================================================================================
 #this will be ran when importing
 #set Jupyter notebook cells to 100% screen size:
-from IPython.core.display import display, HTML
-display(HTML(data="""<style> div#notebook-container { width: 99%; } div#menubar-container { width: 85%; } div#maintoolbar-container { width: 99%; } </style>"""))
+if _isnotebook():
+    from IPython.core.display import display, HTML
+    display(HTML(data="""<style> div#notebook-container { width: 99%; } div#menubar-container { width: 85%; } div#maintoolbar-container { width: 99%; } </style>"""))
