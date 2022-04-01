@@ -93,7 +93,7 @@ if st.button('Run PFSS for selected parameters'):
 
         # No need to touch the function call; just run the cell
         flines = symlog_pspiral(sw=sw, distance=distance, longitude=lon, latitude=lat, hmimap=hmimap, names=names, title=title,
-                                vary=vary, n_varies=n_varies, save=False, use_streamlit=True)
+                                vary=vary, n_varies=n_varies, save=False)
 
 with st.expander("Parameters", expanded=True):
     st.write(f'carrington_rot = {carrington_rot}')

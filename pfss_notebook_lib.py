@@ -282,8 +282,42 @@ def ortho_to_points(lon1, lat1, orthodrome, rad=False):
 
     return lon2, lat2
 
-# include check if inside streamlit here:
-# @st.cache(persist=True, allow_output_mutation=True)
+
+def _isstreamlit():
+    """
+    Function to check whether python code is run within streamlit
+
+    Returns
+    -------
+    use_streamlit : boolean
+        True if code is run within streamlit, else False
+    """
+    # https://discuss.streamlit.io/t/how-to-check-if-code-is-run-inside-streamlit-and-not-e-g-ipython/23439
+    try:
+        from streamlit.script_run_context import get_script_run_ctx
+        if not get_script_run_ctx():
+            use_streamlit = False
+        else:
+            use_streamlit = True
+    except ModuleNotFoundError:
+        use_streamlit = False
+    return use_streamlit
+
+
+def null_decorator(a):
+    # decorator that does nothing
+    return a
+
+
+# if run inside streamlit, use streamlit's caching decorator on get_pfss_hmimap()
+if _isstreamlit():
+    import streamlit as st
+    st_cache_decorator = st.cache(persist=True, allow_output_mutation=True)
+else:
+    st_cache_decorator = null_decorator
+
+
+@st_cache_decorator
 def get_pfss_hmimap(filepath, email, carrington_rot, date, rss=2.5, nrho=35):
     '''
     downloading hmi map or calculating the PFSS solution
@@ -808,7 +842,7 @@ def parker_spiral(sw, distance, longitude, resolution, endpoint=2.5, backtrack=T
 
 
 def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title='', rss=2.5,
-                   vary=False, n_varies=1, save=False, use_streamlit=False):
+                   vary=False, n_varies=1, save=False):
     '''
     Produces a figure of the heliosphere in polar coordinates with logarithmic r-axis outside the pfss.
     Also tracks an open field line down to photosphere given a point on the pfss.
@@ -1020,9 +1054,8 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
     if(save):
         plt.savefig('testfig.png', transparent=False, facecolor='white', bbox_inches='tight')
 
-    # this should be replaced with a spophisticated check whether code is runned inside streamlit:
     # if using streamlit, send plot to streamlit output, else call plt.show()
-    if use_streamlit:
+    if _isstreamlit():
         import streamlit as st
         st.pyplot(fig)  # , dpi=200)
     else:
