@@ -5,39 +5,37 @@ for seeking the footpoints of IMF field lines connecting back to the photosphere
 @Author: Christian Palmroos
          <chospa@utu.fi>
 
-Last updated: 2022-03-15
+Last updated: 2022-05-05
 '''
 
 # imports:
+import os
+import numpy as np
+import pandas as pd
+
 import astropy.constants as const
 import astropy.units as units
 # import astropy.coordinates
-# import astropy.units as u
+import astropy.units as u
 import matplotlib.pyplot as plt
-# import matplotlib.pylab as pl
 import matplotlib.colors as mcolors
+import matplotlib.patches as mpatch
 import cmasher as cmr
-import numpy as np
-import pandas as pd
 import pfsspy
-# import scipy
 import pickle
 import warnings
 import sunpy.map
-# import sunpy.io.fits
+
+from matplotlib.collections import LineCollection
 
 # from astropy.time import Time
 from astropy.coordinates import SkyCoord
-# from pfsspy import coords
 from pfsspy import tracing
 # from pfsspy.sample_data import get_gong_map
-# from mpl_toolkits.mplot3d import Axes3D
 # from matplotlib import cm
 from matplotlib.offsetbox import AnchoredText
 from sunpy.net import Fido, attrs as a
-# from sunpy.coordinates import frames
-
-import os
+from sunpy.coordinates import frames
 
 # some matplotlib settings:
 plt.rcParams['axes.linewidth'] = 1.5
@@ -53,9 +51,20 @@ warnings.simplefilter('ignore')
 
 
 def get_color(key: str = None) -> str:
-    '''
+    """
     Returns the right color for an object according to SOLAR-MACH tool.
-    '''
+
+    params
+    -------
+    key: str (default = None)
+            The name of the spacecraft or planet.
+
+    returns
+    -------
+    color: str (default = 'k')
+            The color identifier that matplotlib understands
+    """
+
     if key is not None:
         key = key.lower()
     else:
@@ -96,13 +105,28 @@ def get_color(key: str = None) -> str:
 
 
 def get_sc_data(csvfile: str):
-    '''
+    """
     Reads the contents of solar-mach produced csv file, and returns lists
     of necessary data to run pfss field line tracing analysis.
 
-    csvfile: str, the name of the csv file one wants to read
-    '''
-    import pandas as pd
+    params
+    ------
+    csvfile: str
+            The name of the csv file one wants to read
+    
+    returns
+    -------
+    names: list[str]
+            List of names
+    sw: list[int/float]
+            List of solar winds in units of km/s
+    dist: list[int/float]
+            List of heliocentric distances in units of AU
+    lons: list[float]
+            List of Carrington longitudes of the corresponding objects
+    lats: list[float]
+            List of Carrington latitudes of the corresponding objects
+    """
 
     if type(csvfile) is not str:
         raise TypeError("File name is not a string.")
@@ -119,10 +143,10 @@ def get_sc_data(csvfile: str):
 
 
 def field_line_accuracy(flines):
-    '''
+    """
     Calculates at least now the central point, average distance from the central point and
     the standard deviation of the photospheric footpoints for a set of field lines
-    '''
+    """
 
     if isinstance(flines[0], list):
         flines = flatten(flines)
@@ -196,9 +220,9 @@ def field_line_accuracy(flines):
 
 
 def shift_longitudes(lons, shift=180.0):
-    '''
+    """
     Shifts the longitudes by <shift> amount
-    '''
+    """
     if shift>0:
         lons = [lon+shift for lon in lons]
         lons = [lon-360.0 if lon>360 else lon for lon in lons]
@@ -212,9 +236,9 @@ def shift_longitudes(lons, shift=180.0):
 
 
 def map_on_surface(fps, c_point, avg_d, shift=None, zoom=None, show_avg_d=False):
-    '''
+    """
     Plots a really simple 2d representation of fieldline objects' footpoints.
-    '''
+    """
 
     import matplotlib.patches as mpatch
 
@@ -253,10 +277,27 @@ def map_on_surface(fps, c_point, avg_d, shift=None, zoom=None, show_avg_d=False)
 
 
 def orthodrome(lon1, lat1, lon2, lat2, rad=False) -> float:
-    '''
-    calculates the othodrome (total angular separtion) between two coordinates defined by their lon/lat positions
-    '''
-    import numpy as np
+    """
+    Calculates the othodrome (total angular separtion) between two coordinates defined by their lon/lat positions
+
+    params
+    -------
+    lon1: int/float
+            Longitude of the first coordinate point
+    lat1: int/float
+            Latitude of the first coordinate point
+    lon2: int/float
+            See lon1
+    lat2: int/float
+            See lat1
+    rad: bool (default = False)
+            Is the input given as radians? If not, treat them as degrees
+    
+    returns
+    -------
+    ortho: float
+            The total angular separation between (lon1,lat1) and (lon2,lat2)
+    """
 
     if(rad == False):
         lon1 = np.deg2rad(lon1)
@@ -270,9 +311,9 @@ def orthodrome(lon1, lat1, lon2, lat2, rad=False) -> float:
 
 
 def ortho_to_points(lon1, lat1, orthodrome, rad=False):
-    '''
-    Calculates a lon/lat pair from a reference point
-    '''
+    """
+    Calculates a lon/lat pair from a reference point given orthodrome away.
+    """
 
     if rad == False:
         lon1 = np.deg2rad(lon1)
@@ -282,46 +323,32 @@ def ortho_to_points(lon1, lat1, orthodrome, rad=False):
 
     return lon2, lat2
 
-
-def _isstreamlit():
-    """
-    Function to check whether python code is run within streamlit
-
-    Returns
-    -------
-    use_streamlit : boolean
-        True if code is run within streamlit, else False
-    """
-    # https://discuss.streamlit.io/t/how-to-check-if-code-is-run-inside-streamlit-and-not-e-g-ipython/23439
-    try:
-        from streamlit.script_run_context import get_script_run_ctx
-        if not get_script_run_ctx():
-            use_streamlit = False
-        else:
-            use_streamlit = True
-    except ModuleNotFoundError:
-        use_streamlit = False
-    return use_streamlit
-
-
-def null_decorator(a):
-    # decorator that does nothing
-    return a
-
-
-# if run inside streamlit, use streamlit's caching decorator on get_pfss_hmimap()
-if _isstreamlit():
-    import streamlit as st
-    st_cache_decorator = st.cache(persist=True, allow_output_mutation=True)
-else:
-    st_cache_decorator = null_decorator
-
-
-@st_cache_decorator
+# include check if inside streamlit here:
+# @st.cache(persist=True, allow_output_mutation=True)
 def get_pfss_hmimap(filepath, email, carrington_rot, date, rss=2.5, nrho=35):
-    '''
-    downloading hmi map or calculating the PFSS solution
-    '''
+    """
+    Downloading hmi map or calculating the PFSS solution
+
+    params
+    -------
+    filepath: str
+            Path to the hmimap, if exists.
+    email: str
+            The email address of a registered user
+    carrington_rot: int
+            The Carrington rotation corresponding to the hmi map
+    date: str
+            The date of the map. Format = 'YYYY/MM/DD'
+    rss: float (default = 2.5)
+            The height of the potential field source surface for the solution.
+    nrho: int (default = 35)
+            The resolution of the PFSS-solved field line objects
+    
+    returns
+    -------
+    output: hmi_synoptic_map object
+            The PFSS-solution
+    """
 
     time = a.Time(date, date)
     pfname =  f"PFSS_output_{str(time.start.datetime.date())}_CR{str(carrington_rot)}_SS{str(rss)}_nrho{str(nrho)}.p"
@@ -358,19 +385,24 @@ def get_pfss_hmimap(filepath, email, carrington_rot, date, rss=2.5, nrho=35):
 
 
 def circle_around(x, y, n, r=0.1):
-    '''
+    """
     Produces new points around a (x,y) point in a circle.
-
-    x,y: coordinates of the original point
-    n: the amount of new points around the origin
-    r: the radius of the circle at which new points are placed (in radians)
-
-    returns:
-    pointlist: list of new points (tuples) around the original point in a circle, placed
-                at equal intervals
-
     At the moment does not work perfectly in the immediate vicinity of either pole.
-    '''
+
+    params
+    -------
+    x,y: int/float
+            Coordinates of the original point
+    n: int
+            The amount of new points around the origin
+    r: int/float (default = 0.1)
+            The radius of the circle at which new points are placed
+
+    returns
+    -------
+    pointlist: list[float]
+            List of new points (tuples) around the original point in a circle, placed at equal intervals
+    """
 
     origin = (x, y)
 
@@ -402,19 +434,36 @@ def circle_around(x, y, n, r=0.1):
 
 
 def vary_flines(lon, lat, hmimap, n_varies, rss):
-    '''
+    """
     Finds a set of sub-pfss fieldlines connected to or very near a single footpoint on the pfss.
 
-    lon: longitude of the footpoint [rad]
-    lat: latitude of the footpoint [rad]
+    params
+    -------
+    lon: int/float
+            The longitude of the footpoint in radians
+    lat: int/float
+            The latitude of the footpoint in radians
+    hmimap: hmi_synoptic_map object
+            The pfss-solution used to calculate the field lines
+    n_varies: list[int,int] or int 
+            A list that holds the amount of circles and the number of dummy flines per circle
+            if type(n_varies)=int, consider that as the amount of circles, and set the
+            amount of dummy flines per circle to 16
+    rss: float
+            Heliocentric height of the source surface
 
-    n_varies:   tuple that holds the amount of circles and the number of dummy flines per circle
-                if type(n_varies)=int, consider that as the amount of circles, and set the
-                amount of dummy flines per circle to 16
+    returns
+    -------
+    coordlist: list[float,float,float]
+            List of coordinate triplets of the original field lines (lon,lat,height)
+    flinelist: list[FieldLine-object]
+            List of Fieldline objects of the original field lines
+    varycoords: list[float,float,float]
+            List of coordinate triplets of the varied field lines
+    varyflines: list[FieldLine-object]
+            List of Fieldline objects of the varied field lines
+    """
 
-    n_circles:  the amount of circles of fieldlines traced
-    n_flines:   the number of dummy fieldlines per one circle of fieldlines
-    '''
     # field lines per n_circles (circle)
     if isinstance(n_varies, list):
         n_circles = n_varies[0]
@@ -461,9 +510,22 @@ def vary_flines(lon, lat, hmimap, n_varies, rss):
 
 
 def get_coord_values(field_line):
-    '''
+    """
     Gets the coordinate values from FieldLine object and makes sure that they are in the right order.
-    '''
+
+    params
+    -------
+    field_line: FieldLine object
+
+    returns
+    -------
+    fl_r: list[float]
+            The list of heliocentric distances of each segment of the field line
+    fl_lon: list[float]
+            The list of Carrington longitudes of each field line segment
+    fl_lat: list[float]
+            The list of Carrington latitudes of each field line segment
+    """
 
     # first check that the field_line object is oriented correctly (start on photosphere and end at pfss)
     fl_coordinates = field_line.coords
@@ -477,11 +539,26 @@ def get_coord_values(field_line):
 
 
 def get_field_line_coords(longitude, latitude, hmimap, rss):
-    '''
+    """
     Returns triplets of open magnetic field line coordinates, and the field line object itself
 
-    longitude and latitude are given in radians
-    '''
+    params
+    -------
+    longitude: int/float
+            Carrington longitude of the seeding point for the FieldLine tracing
+    latitude: int/float
+            Carrington latitude of the seeding point for the FieldLine tracing
+    hmimap: hmi_synoptic_map object
+    rss: float
+            Heliocentric height of the source surface
+
+    returns
+    -------
+    coordlist: list[list[float,float,float]]
+            The list of lists  of all coordinate triplets that correspond to the FieldLine objects traced
+    flinelist: list[FieldLine]
+            List of all FieldLine objects traced
+    """
 
     # the amount of coordinate triplets we are going to trace
     try:
@@ -496,45 +573,34 @@ def get_field_line_coords(longitude, latitude, hmimap, rss):
     flinelist = []
     for i in range(coord_triplets):
 
+        turn = 'lon'
         increment = 1
         sign_switch = 1
-        init_lat0 = latitude[i]
-        init_lon0 = longitude[i]
 
         # keep tracing the field line until a valid one is found
         while(True):
 
             # trace a field line downward from the point lon,lat on the pfss
-            fline = trace_field_line(longitude[i], latitude[i], hmimap, rss)
+            fline = trace_field_line(longitude[i], latitude[i], hmimap, seedheight=rss)
 
             radius0 = fline.coords.radius[0].value
             radius9 = fline.coords.radius[-1].value
             bool_key = (radius0==radius9)
 
-            # if fline is not a valid field line, then alter lat a little and try again
+            # if fline is not a valid field line (too short), then spiral out from the point and try again
             # also check if this is a null line (all coordinates identical)
-            if( (len(fline.coords) < 10) or bool_key ):
+            # also check closed lines (those with polarity==0)
+            if( (len(fline.coords) < 10) or bool_key or fline.polarity==0):
 
-                latitude[i] = init_lat0 + increment*sign_switch*0.0001
-                sign_switch = sign_switch*(-1)
-                if(sign_switch>0):
-                    increment += 1
+                longitude[i], latitude[i], increment, sign_switch, turn = spiral_out(longitude[i], latitude[i], increment, sign_switch, turn)
 
-            # skip closed lines
-            elif fline.polarity == 0:
-
-                longitude[i] = init_lon0 + increment*sign_switch*0.0001
-                sign_switch = sign_switch*(-1)
-                if(sign_switch>0):
-                    increment += 1
 
             # check that we are not too far from the original coordinate
-            elif(increment > 500):
+            elif(increment > 20):
                 raise Exception('no field line footpoint found on the given coordinate')
 
             # if there was nothing wrong, break the loop and proceed with the traced field line
             else:
-                # print("increment:",increment)
                 break
 
         # get the field line coordinate values in the correct order
@@ -548,8 +614,70 @@ def get_field_line_coords(longitude, latitude, hmimap, rss):
 
     return coordlist, flinelist
 
+def spiral_out(lon, lat, sign_switch, corner_tracker, turn):
+    """
+    Moves the seeding point in an outward spiral.
+    
+    params
+    -------
+    lon, lat: float
+            the carrington coordinates on a surface of a sphere (sun or pfss)
+    sign_switch: int
+            -1 or 1, dictates the direction in which lon or lat is 
+            incremented
+    corner_tracker: tuple
+            first entry is steps_unti_corner, int that tells how many steps to the next corner of a spiral
+            the second entry is steps taken on a given spiral turn
+    turn: str
+            indicates which is to be incremented, either 'lon' or 'lat'
+            
+    returns
+    -------
+    lon, lat: int/float
+            new coordinate pair
+    """
+    
+    # in radians, 1 rad \approx 57.3 deg
+    step = 0.05
+    
+    # keeps track of how many steps until it's time to turn
+    steps_until_corner, steps_moved = corner_tracker[0], corner_tracker[1]
+
+    if turn=='lon':
+        
+        lon = lon + step*sign_switch
+        lat = lat
+        
+        steps_moved += 1
+        
+        # we have arrived in a corner, time to move in lat direction
+        if steps_until_corner == steps_moved:
+            steps_moved = 0
+            turn = 'lat'
+
+        return lon, lat, sign_switch, [steps_until_corner, steps_moved], turn
+
+    if turn=='lat':
+        
+        lon = lon
+        lat = lat + step*sign_switch
+        
+        steps_moved += 1
+        
+        if steps_until_corner == steps_moved:
+            steps_moved = 0
+            steps_until_corner += 1
+            turn = 'lon'
+            sign_switch = sign_switch*(-1)
+        
+        return lon, lat, sign_switch, [steps_until_corner, steps_moved], turn
+
 
 def au_to_km(distlist):
+    """
+    Takes a list of distances in AU and converts them to kilometers
+    """
+    # @TODO: use AstroPy units to convert!
 
     for i in range(len(distlist)):
         distlist[i] = distlist[i]*(150e6)
@@ -558,13 +686,21 @@ def au_to_km(distlist):
 
 
 def multicolorline(x, y, cvals, ax, vmin=-90, vmax=90):
-    '''
-    original example from:
-    https://matplotlib.org/stable/gallery/lines_bars_and_markers/multicolored_line.html
-    '''
+    """
+    Constructs a line object, with each segemnt of the line color coded
+    Original example from: https://matplotlib.org/stable/gallery/lines_bars_and_markers/multicolored_line.html
 
-    from matplotlib.collections import LineCollection
-    # from matplotlib.colors import ListedColormap, BoundaryNorm
+    params
+    -------
+    x, y: float
+    cvals: str
+    ax: Figure.Axes object
+    vmin, vmax: int (default = -90, 90)
+
+    returns
+    -------
+    line: LineCollection object
+    """
 
     # Create a set of line segments so that we can color them individually
     # This creates the points as a N x 1 x 2 array so that we can stack points
@@ -603,6 +739,19 @@ def multicolorline(x, y, cvals, ax, vmin=-90, vmax=90):
 
 
 def plot3d(field_lines, names, color_code='polarity'):
+    """
+    Creates an interactive 3D plot that the user is free to rotate and zoom in a Jupyter notebook.
+
+    params
+    -------
+    field_lines : FieldLine object, or a list of them
+
+    names : str
+            names of the objects corresponding to the tracked field lines
+    
+    color_code : str
+            either 'polarity' or 'object', dictates the color coding of the field lines
+    """
 
     if not isinstance(field_lines, list):
         field_lines = [field_lines]
@@ -656,14 +805,12 @@ def plot3d(field_lines, names, color_code='polarity'):
 
 def draw_fieldlines(field_lines, rss=2.5, frame='yz', color_code='polarity', names=[], save=False):
 
-    import matplotlib.patches as mpatch
-
     # check if there's a list inside a list, if there is -> flatten
     # NOTICE: flatten() messes up the order of the field lines, putting the original flines
     # first and then the varied field lines
     if isinstance(field_lines[0], list):
         modulator = len(field_lines[1])//len(names)  # modulates the order of field lines and the colors picked from c_list
-        field_lines = flatten_flines(field_lines, modulator)
+        field_lines = flatten_flines(field_lines, modulator) # flatten_flines() conserves the correct ordering of field line objects
 
     fig, ax = plt.subplots(figsize=[10, 10])
     ax.set_aspect('equal')
@@ -809,21 +956,24 @@ def trace_field_line(lon0, lat0, hmimap, rss, rad=True):
     return field_line
 
 
-def parker_spiral(sw, distance, longitude, resolution, endpoint=2.5, backtrack=True):
+def parker_spiral(sw, distance, longitude, resolution=1000, endpoint=2.5, backtrack=True):
     '''
     construct one magnetic parker spiral arm
 
-    INPUT
+    params
+    ---------------------
     sw: solar wind speed in km/s
     distance: distance to the object in km
     longitude: angular coordinate of the object (stellar longitude?) in deg
     resolution: resolution of the curve (amount of points making the curve)
     endpoint: the point at which one wants to stop tracing back the spiral arm in solar radii
 
-    RETURNS
-    phi: array of angular coordinates in rad
-    r: array of radial coordinates in solar radii
+    returns
+    ---------------------
+    phi: array of angular coordinates in rad, type = [float]
+    r: array of radial coordinates in solar radii, type = [float]
     '''
+
     # parker spiral solution e.g. here:
     # http://www.physics.usyd.edu.au/~cairns/teaching/2010/lecture8_2010.pdf
 
@@ -836,13 +986,13 @@ def parker_spiral(sw, distance, longitude, resolution, endpoint=2.5, backtrack=T
         phi = longitude + (omega)*(distance-r)/sw
     # if not backtracking, solve parker spiral from pfss outward all the way to max distance
     else:
-        phi = longitude + (omega*r)/sw
+        phi = longitude - (omega*r)/sw
 
     return phi, r
 
 
 def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title='', rss=2.5,
-                   vary=False, n_varies=1, save=False):
+                   vary=False, n_varies=1, reference_longitude=None, save=False, use_streamlit=False):
     '''
     Produces a figure of the heliosphere in polar coordinates with logarithmic r-axis outside the pfss.
     Also tracks an open field line down to photosphere given a point on the pfss.
@@ -852,16 +1002,16 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
     longitude = angular coordinate of the object in deg (stellar longitude?), type: int, float or list
     latitude = see longitude
     r_s = source surface height of the potential field, type: float
-    resolution = resolution of the spiral curve, type: int
+    reference_longitude : draws an arrow pointing radially outward, degree type: int or floar
     save = boolean value to save the figure
-
+    
     --RETURNS---
     either,
         fline_objects: a list holding all the field line objects that were calculated for the plot
     or if vary,
         [fline objects, varyfline_objects]: a list containing a list of field line objects, and also
                                             lists of all the varied field line objects
-
+    
     '''
 
     if names == None:
@@ -900,6 +1050,12 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
     else:
         phi, r = parker_spiral(sw_norm, distance_norm, longitude, resolution=1000, endpoint=rss)
         sc_footpoint = [phi[0], r[0]]
+
+    # calculate parker spiral for ref longitude, if one is inputted
+    if reference_longitude is not None:
+        default_sw = 400e3 / sun_radius
+        max_distance = 480e9 / sun_radius
+        ref_phi, ref_r = parker_spiral(default_sw, max_distance, np.deg2rad(reference_longitude), backtrack=False)
 
     # ----------------------------------------------------------
     # tracing the closest field line to sc_footpoint down to photosphere:
@@ -957,6 +1113,21 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
         # mark the object
         ax.scatter(phi[-1], projection*r[-1], c='C0', s=175, zorder=3)
 
+    # the reference longitude arrow and parker spiral
+    if reference_longitude is not None:
+
+        ref_lon_rad = np.deg2rad(reference_longitude)
+        arrowprops = {'width':0.8, 'headwidth':9, 'color':'black'}
+
+        ax.annotate(text=None, xy=(ref_lon_rad, 2.5), 
+                    xytext=(ref_lon_rad, 1.0),
+                    arrowprops=arrowprops)
+
+        ax.plot(ref_phi, ref_r, c='black', ls='--', label='reference_longitude')
+
+    # it seems that all other plotting must be done before this line
+    # the exact reason for this still eludes me (2022-04-29, Vappu Eve) maybe something to do with multicolorline()?
+
     # plot the field line(s) connecting ss_footpoint and the solar surface and collect relevant
     # points (footpoints) to an array
     display_fl_footpoints = []
@@ -997,8 +1168,6 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
     ax.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
     rlabels = ['1', str(rss), r'$10^1$', r'$10^2$']
     ax.set_yticklabels(rlabels)
-
-    # plt.legend(loc=10, bbox_to_anchor=(-0.1, 0.1))
 
     # create the colorbar displaying values of the last fieldline plotted
     cb = fig.colorbar(fieldline)
@@ -1048,14 +1217,23 @@ def symlog_pspiral(sw, distance, longitude, latitude, hmimap, names=None, title=
             plabel.patch.set_edgecolor(get_color(names[i]))
             ax.add_artist(plabel)
 
+    # add a box to show reference longitude
+    ref_lon_label = f"Reference Longitude:\n{reference_longitude} deg"
+    ref_lon_box = AnchoredText(f"{ref_lon_label}", prop=dict(size=txtsize+1), frameon=True, loc=(2), bbox_to_anchor=(15, (840-(len(display_fl_footpoints)+1)*75) )) #float('1.{}'.format(i))
+    ref_lon_box.patch.set_boxstyle("round, pad=0., rounding_size=0.2")
+    ref_lon_box.patch.set_linewidth(3.0)
+    ref_lon_box.patch.set_edgecolor(get_color(None))
+    ax.add_artist(ref_lon_box)
+
     # set the title of the figure
     plt.title(title)
 
     if(save):
-        plt.savefig('testfig.png', transparent=False, facecolor='white', bbox_inches='tight')
+        plt.savefig('pfss_constellation_figure.png', transparent=False, facecolor='white', bbox_inches='tight')
 
+    # this should be replaced with a spophisticated check whether code is runned inside streamlit:
     # if using streamlit, send plot to streamlit output, else call plt.show()
-    if _isstreamlit():
+    if use_streamlit:
         import streamlit as st
         st.pyplot(fig)  # , dpi=200)
     else:
@@ -1150,9 +1328,9 @@ def write_info_to_csv(flines, names=[None], filename='magnetic_info'):
 # Coordinate transformations:
 
 def heeq2hgc(xyz_list, obstimes, observer='earth', unit=None, returns='objects'):
-    '''
+    """
     Takes a list of cartesian xyz coordinates in HEEQ (Heliospheric Earth Equatorial) frame and transforms them into HGC (HelioGraphic Carrington) coordinates.
-    '''
+    """
 
     from astropy.coordinates import SkyCoord, CartesianRepresentation
     # from sunpy.coordinates import HeliographicCarrington
@@ -1185,11 +1363,6 @@ def heeq2hgc(xyz_list, obstimes, observer='earth', unit=None, returns='objects')
 
 
 def arcsec_to_carrington(arc_x, arc_y, time):
-
-    from astropy.coordinates import SkyCoord
-    import astropy.units as u
-    from sunpy.coordinates import frames
-    # from sunpy.coordinates import get_horizons_coord
 
     """
     transforms arcsec on the solar disk (as seen from Earth) to Carrington longitude & latitude    Parameters
