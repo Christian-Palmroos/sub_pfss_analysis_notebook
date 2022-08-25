@@ -729,16 +729,21 @@ def spiral_out(lon, lat, sign_switch, corner_tracker, turn):
         return lon, lat, sign_switch, [steps_until_corner, steps_moved], turn
 
 
-def au_to_km(distlist):
+def au_to_km(list_of_distances):
     """
     Takes a list of distances in AU and converts them to kilometers
     """
-    # @TODO: use AstroPy units to convert!
+   
+    # Convert to numpy array for performance
+    list_of_distances = np.asarray(list_of_distances)
 
-    for i in range(len(distlist)):
-        distlist[i] = distlist[i]*(150e6)
+    # Add units of astronomical units
+    list_of_distances = list_of_distances * u.au
+    
+    # Convert to units of kilometers
+    list_of_distances = list_of_distances.to(u.km)
 
-    return distlist
+    return list_of_distances.value
 
 
 def multicolorline(x, y, cvals, ax, vmin=-90, vmax=90):
