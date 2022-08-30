@@ -887,9 +887,9 @@ def plot3d(field_lines, names, color_code='polarity'):
             color = colors.get(field_line.polarity)
         if color_code=='object':
             color = c_list[i//(modulator+1)]
-        axarr.plot(coords.x / const.R_sun,
-                   coords.y / const.R_sun,
-                   coords.z / const.R_sun,
+        axarr.plot(coords.cartesian.x / const.R_sun,
+                   coords.cartesian.y / const.R_sun,
+                   coords.cartesian.z / const.R_sun,
                    color=color, linewidth=1)
 
     try:
@@ -933,13 +933,13 @@ def draw_fieldlines(field_lines, rss=2.5, frame='yz', color_code='polarity', nam
                 color = c_list[i//(modulator+1)]
 
             if(frame=='yz'):
-                ax.plot(coords.y / const.R_sun, coords.z / const.R_sun, color=color)
+                ax.plot(coords.cartesian.y / const.R_sun, coords.cartesian.z / const.R_sun, color=color)
                 projection = 'POV: Carrington longitude 0'
             elif(frame=='xy'):
-                ax.plot(coords.x / const.R_sun, coords.y / const.R_sun, color=color)
+                ax.plot(coords.cartesian.x / const.R_sun, coords.cartesian.y / const.R_sun, color=color)
                 projection = 'POV: North'
             elif(frame=='xz'):
-                ax.plot(coords.x / const.R_sun, coords.z / const.R_sun, color=color)
+                ax.plot(coords.cartesian.x / const.R_sun, coords.cartesian.z / const.R_sun, color=color)
                 projection = 'POV: Carrington longitude 270'
             else:
                 raise Exception("Invalid frame")
@@ -951,13 +951,13 @@ def draw_fieldlines(field_lines, rss=2.5, frame='yz', color_code='polarity', nam
         coords.representation = 'cartesian'
         color = {0: 'black', -1: 'tab:blue', 1: 'tab:red'}.get(field_line.polarity)
         if(frame=='yz'):
-            ax.plot(coords.y / const.R_sun, coords.z / const.R_sun, color=color)
+            ax.plot(coords.cartesian.y / const.R_sun, coords.cartesian.z / const.R_sun, color=color)
             projection = 'POV: Carrington longitude 0'
         elif(frame=='xy'):
-            ax.plot(coords.x / const.R_sun, coords.y / const.R_sun, color=color)
+            ax.plot(coords.cartesian.x / const.R_sun, coords.cartesian.y / const.R_sun, color=color)
             projection = 'POV: North'
         elif(frame=='xz'):
-            ax.plot(coords.x / const.R_sun, coords.z / const.R_sun, color=color)
+            ax.plot(coords.cartesian.x / const.R_sun, coords.cartesian.z / const.R_sun, color=color)
             projection = 'POV: Carrington longitude 270'
         else:
             raise Exception("Invalid frame")
