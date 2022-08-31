@@ -3,9 +3,10 @@ cmasher
 drms
 lxml
 matplotlib
+matplotlib-inline==0.1.3
 numpy
 pandas
 pfsspy
 streamlit
-sunpy
+sunpy>=4.0.0.
 zeep
