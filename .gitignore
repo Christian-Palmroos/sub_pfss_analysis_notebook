@@ -232,6 +232,9 @@ aia_map.fits
 .history
 *.orig
 .tmp
+*.png
+*.csv
+*.p
 
 # PyInstaller Files
 .pyinstaller/run_tests
